@@ -49,6 +49,8 @@ class NmapTool(ToolBase):
         if not can_elevate:
             self.logger.info("Raw sockets / root not available: using TCP connect scan (-sT) instead of SYN scan")
 
+        args = [self.get_binary_path()]
+
         # Scan type flags
         if scan_type == "stealth":
             args.append(stealth_flag)
