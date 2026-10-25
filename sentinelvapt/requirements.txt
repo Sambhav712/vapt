@@ -1,24 +1,31 @@
-# Core Web API & Validation
-fastapi>=0.110.0
-uvicorn[standard]>=0.28.0
-pydantic>=2.6.0
-pydantic-settings>=2.2.0
+# ==============================================================================
+# SentinelVAPT — Dependencies
+# Python 3.10+ compatibility (Windows, Kali Linux, Debian/Ubuntu, macOS)
+# ==============================================================================
+
+# ── Web Framework & API Server ────────────────────────────────────────────────
+fastapi>=0.110.0,<1.0.0
+uvicorn[standard]>=0.28.0,<1.0.0
+pydantic>=2.6.0,<3.0.0
+pydantic-settings>=2.2.0,<3.0.0
 python-multipart>=0.0.9
 
-# Database & Async Drivers
-sqlalchemy>=2.0.28
+# ── Database & ORM (Async SQLite included by default) ─────────────────────────
+sqlalchemy>=2.0.28,<3.0.0
 aiosqlite>=0.20.0
-# asyncpg>=0.29.0       # Optional: for PostgreSQL async driver
-# psycopg2-binary>=2.9.9 # Optional: for PostgreSQL sync driver
 
-# Reporting & Templates
-jinja2>=3.1.3
-reportlab>=4.1.0
-pyyaml>=6.0.1
-
-# HTTP Clients & Scraping
+# ── HTTP Clients & Scraping ───────────────────────────────────────────────────
 httpx>=0.27.0
 requests>=2.31.0
 
-# Optional Infrastructure
-redis>=5.0.3
+# ── Configuration & Serialization ─────────────────────────────────────────────
+pyyaml>=6.0.1
+jinja2>=3.1.3
+
+# ── Automated Audit Reporting (Executive PDFs) ────────────────────────────────
+reportlab>=4.1.0
+
+# ── Optional Production Drivers (Uncomment if needed) ─────────────────────────
+# asyncpg>=0.29.0          # High-performance async PostgreSQL driver
+# psycopg2-binary>=2.9.9    # Synchronous PostgreSQL driver
+# redis>=5.0.3              # Distributed cache/queue for enterprise scaling
