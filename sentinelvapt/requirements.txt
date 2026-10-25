@@ -11,7 +11,8 @@ pydantic-settings>=2.2.0,<3.0.0
 python-multipart>=0.0.9
 
 # ── Database & ORM (Async SQLite included by default) ─────────────────────────
-sqlalchemy>=2.0.28,<3.0.0
+sqlalchemy[asyncio]>=2.0.28,<3.0.0
+greenlet>=3.0.0
 aiosqlite>=0.20.0
 
 # ── HTTP Clients & Scraping ───────────────────────────────────────────────────
