@@ -149,6 +149,10 @@ class PipelineOrchestrator:
 
     # ─── Main Pipeline Entry Point ─────────────────────
 
+    async def run(self):
+        """Alias for run_pipeline."""
+        return await self.run_pipeline()
+
     async def run_pipeline(self):
         """Execute the full pipeline, stage by stage."""
         try:

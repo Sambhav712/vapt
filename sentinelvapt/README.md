@@ -354,6 +354,9 @@ When a scan finishes, SentinelVAPT automatically produces multiple artifacts ins
 - Run: `python run.py --install-tools`
 - On Kali Linux, standard tools (`nmap`, `sqlmap`, `nikto`) are already installed by default.
 
+### Q5: Getting `ModuleNotFoundError: No module named 'greenlet'`?
+- **Solution**: Run `pip install greenlet` or update via `pip install -r requirements.txt`. SQLAlchemy's async engine requires `greenlet` for asynchronous context switching.
+
 ---
 
 ## 📄 License & Disclaimer

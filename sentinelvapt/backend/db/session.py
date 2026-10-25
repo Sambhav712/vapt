@@ -65,14 +65,35 @@ async def get_async_session() -> AsyncSession:
             await session.close()
 
 
+def _sync_migrate_sqlite(sync_conn):
+    """Ensure newly added columns exist in existing SQLite databases without requiring manual migration."""
+    try:
+        from sqlalchemy import text
+        cols_result = sync_conn.execute(text("PRAGMA table_info(jobs)"))
+        cols = [r[1] for r in cols_result.fetchall()]
+        if cols:
+            if "enabled_tools" not in cols:
+                sync_conn.execute(text("ALTER TABLE jobs ADD COLUMN enabled_tools JSON DEFAULT '[]'"))
+                logger.info("Auto-migrated: added 'enabled_tools' column to jobs table.")
+            if "disabled_tools" not in cols:
+                sync_conn.execute(text("ALTER TABLE jobs ADD COLUMN disabled_tools JSON DEFAULT '[]'"))
+                logger.info("Auto-migrated: added 'disabled_tools' column to jobs table.")
+            if "ai_analysis_result" not in cols:
+                sync_conn.execute(text("ALTER TABLE jobs ADD COLUMN ai_analysis_result JSON"))
+                logger.info("Auto-migrated: added 'ai_analysis_result' column to jobs table.")
+    except Exception as m_err:
+        logger.debug("SQLite auto-migration skipped: %s", m_err)
+
+
 async def init_db():
-    """Create all tables. Used at application startup. Falls back to SQLite if PostgreSQL is unavailable."""
+    """Create all tables and auto-migrate missing columns. Falls back to SQLite if PostgreSQL is unavailable."""
     global async_engine, sync_engine, AsyncSessionLocal, SyncSessionLocal
     from backend.db.models import Base
 
     try:
         async with async_engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await conn.run_sync(_sync_migrate_sqlite)
         logger.info("Database initialized successfully.")
     except Exception as e:
         logger.warning(
@@ -87,4 +108,5 @@ async def init_db():
         SyncSessionLocal.configure(bind=sync_engine)
         async with async_engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await conn.run_sync(_sync_migrate_sqlite)
         logger.info("Database initialized successfully with SQLite fallback: %s", sqlite_path)

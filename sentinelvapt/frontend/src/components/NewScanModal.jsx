@@ -64,9 +64,17 @@ export default function NewScanModal({ isOpen, onClose, onScanCreated }) {
         }),
       });
 
-      const data = await resp.json();
+      let data = {};
+      const contentType = resp.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        data = await resp.json();
+      } else {
+        const errorText = await resp.text();
+        throw new Error(errorText || `Backend responded with HTTP ${resp.status}`);
+      }
+
       if (!resp.ok) {
-        throw new Error(data.detail || 'Failed to initialize scan');
+        throw new Error(data.detail || `Scan creation failed (HTTP ${resp.status})`);
       }
 
       onScanCreated(data.job_id);
