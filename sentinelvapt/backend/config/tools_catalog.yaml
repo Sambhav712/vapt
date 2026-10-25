@@ -1,0 +1,371 @@
+# ==============================================================================
+# SentinelVAPT — Extensible Security Tool Catalog
+# Defines supported Kali Linux and open-source security tools with risk tiering,
+# CLI invocation templates, output formats, and dynamic trigger rules.
+#
+# Risk Tiers:
+#   Tier 1: Passive/Recon & non-intrusive (Always safe to auto-run)
+#   Tier 2: Active scanning & directory enumeration (Requires scope confirmation)
+#   Tier 3: Active exploitation, credential testing, cracking (Requires explicit authorization & allowlist)
+# ==============================================================================
+
+tools:
+  # ─── TIER 1: RECONNAISSANCE & NON-INTRUSIVE (SAFE) ───────────────────────────
+  - name: whatweb
+    binary: whatweb
+    category: recon
+    tier: 1
+    description: Next-generation web scanner for technology and CMS fingerprinting
+    args_template: ["{target}", "--log-json={output_file}", "--color=never", "-a", "1"]
+    output_format: json
+    parser_type: whatweb_json
+    trigger_conditions:
+      scopes: ["web", "api"]
+      ports: [80, 443, 8000, 8080, 8443, 3000, 5000]
+    apt_package: whatweb
+    version_flag: "--version"
+    timeout_seconds: 120
+
+  - name: wafw00f
+    binary: wafw00f
+    category: recon
+    tier: 1
+    description: Web Application Firewall (WAF) detection and fingerprinting tool
+    args_template: ["{target}", "-f", "json", "-o", "{output_file}"]
+    output_format: json
+    parser_type: wafw00f_json
+    trigger_conditions:
+      scopes: ["web", "api"]
+      ports: [80, 443, 8080, 8443]
+    apt_package: wafw00f
+    version_flag: "--version"
+    timeout_seconds: 90
+
+  - name: subfinder
+    binary: subfinder
+    category: recon
+    tier: 1
+    description: Passive subdomain discovery using OSINT sources
+    args_template: ["-d", "{domain}", "-json", "-o", "{output_file}", "-silent"]
+    output_format: json
+    parser_type: json_lines
+    trigger_conditions:
+      scopes: ["web", "network"]
+    apt_package: subfinder
+    version_flag: "-version"
+    timeout_seconds: 180
+
+  - name: theharvester
+    binary: theHarvester
+    category: recon
+    tier: 1
+    description: E-mail, subdomain, and employee name harvester for OSINT reconnaissance
+    args_template: ["-d", "{domain}", "-b", "all", "-l", "100", "-f", "{output_file}"]
+    output_format: xml
+    parser_type: generic_text
+    trigger_conditions:
+      scopes: ["web", "network"]
+    apt_package: theharvester
+    version_flag: "-h"
+    timeout_seconds: 240
+
+  - name: httpx
+    binary: httpx
+    category: recon
+    tier: 1
+    description: Fast multi-purpose HTTP probe and tech detector
+    args_template: ["-u", "{target}", "-json", "-o", "{output_file}", "-silent", "-tech-detect", "-status-code"]
+    output_format: json
+    parser_type: json_lines
+    trigger_conditions:
+      scopes: ["web", "api", "network"]
+    apt_package: httpx-toolkit
+    version_flag: "-version"
+    timeout_seconds: 120
+
+  - name: amass
+    binary: amass
+    category: recon
+    tier: 1
+    description: Attack surface mapping and network infrastructure asset discovery
+    args_template: ["enum", "-passive", "-d", "{domain}", "-json", "{output_file}"]
+    output_format: json
+    parser_type: json_lines
+    trigger_conditions:
+      scopes: ["network", "web"]
+    apt_package: amass
+    version_flag: "-version"
+    timeout_seconds: 300
+
+  - name: nmap
+    binary: nmap
+    category: scanning
+    tier: 1
+    description: Network mapper, port discovery, and OS fingerprinting
+    args_template: ["-sS", "-sV", "--top-ports", "1000", "-T4", "-oX", "{output_file}", "{target}"]
+    output_format: xml
+    parser_type: nmap_xml
+    trigger_conditions:
+      scopes: ["network", "web", "api"]
+    apt_package: nmap
+    version_flag: "--version"
+    timeout_seconds: 600
+
+  - name: tshark
+    binary: tshark
+    category: network
+    tier: 1
+    description: Network protocol analyzer for packet capture inspection
+    args_template: ["-r", "{input_file}", "-T", "json"]
+    output_format: json
+    parser_type: generic_json
+    trigger_conditions:
+      scopes: ["network"]
+    apt_package: tshark
+    version_flag: "-v"
+    timeout_seconds: 120
+
+  # ─── TIER 2: ACTIVE SCANNING & ENUMERATION (REQUIRES CONFIRMATION) ───────────
+  - name: nuclei
+    binary: nuclei
+    category: scanning
+    tier: 1
+    description: Fast template-based vulnerability scanner by ProjectDiscovery
+    args_template: ["-u", "{target}", "-json-export", "{output_file}", "-silent", "-nc"]
+    output_format: json
+    parser_type: nuclei_json
+    trigger_conditions:
+      scopes: ["web", "api", "network"]
+    apt_package: nuclei
+    version_flag: "-version"
+    timeout_seconds: 600
+
+  - name: nikto
+    binary: nikto
+    category: web
+    tier: 2
+    description: Web server configuration, outdated components, and CGI vulnerability scanner
+    args_template: ["-h", "{target}", "-Format", "json", "-output", "{output_file}", "-Tuning", "123489"]
+    output_format: json
+    parser_type: nikto_json
+    trigger_conditions:
+      scopes: ["web"]
+      ports: [80, 443, 8080, 8443]
+    apt_package: nikto
+    version_flag: "-Version"
+    timeout_seconds: 600
+
+  - name: gobuster
+    binary: gobuster
+    category: web
+    tier: 2
+    description: Directory, file, and DNS path brute-force tool
+    args_template: ["dir", "-u", "{target}", "-w", "/usr/share/wordlists/dirb/common.txt", "-o", "{output_file}", "-q", "--timeout", "10s"]
+    output_format: text
+    parser_type: gobuster_text
+    trigger_conditions:
+      scopes: ["web", "api"]
+      ports: [80, 443, 8080, 8443]
+    apt_package: gobuster
+    version_flag: "version"
+    timeout_seconds: 300
+
+  - name: dirsearch
+    binary: dirsearch
+    category: web
+    tier: 2
+    description: Advanced web path scanner with recursive directory discovery
+    args_template: ["-u", "{target}", "--format=json", "-o", "{output_file}", "-t", "20"]
+    output_format: json
+    parser_type: generic_json
+    trigger_conditions:
+      scopes: ["web", "api"]
+    apt_package: dirsearch
+    version_flag: "--version"
+    timeout_seconds: 300
+
+  - name: dirb
+    binary: dirb
+    category: web
+    tier: 2
+    description: Web content scanner using dictionary-based brute force
+    args_template: ["{target}", "-o", "{output_file}", "-S", "-r"]
+    output_format: text
+    parser_type: generic_text
+    trigger_conditions:
+      scopes: ["web"]
+    apt_package: dirb
+    version_flag: "-h"
+    timeout_seconds: 300
+
+  - name: wpscan
+    binary: wpscan
+    category: web
+    tier: 2
+    description: Black box WordPress vulnerability scanner (plugins, themes, core)
+    args_template: ["--url", "{target}", "--format", "json", "-o", "{output_file}", "--disable-tls-checks", "--no-banner"]
+    output_format: json
+    parser_type: wpscan_json
+    trigger_conditions:
+      scopes: ["web"]
+      tech_keywords: ["wordpress", "wp-content", "wp-includes"]
+    apt_package: wpscan
+    version_flag: "--version"
+    timeout_seconds: 400
+
+  - name: masscan
+    binary: masscan
+    category: scanning
+    tier: 2
+    description: Asynchronous ultra-fast TCP port scanner
+    args_template: ["{target}", "-p1-65535", "--rate=1000", "-oJ", "{output_file}"]
+    output_format: json
+    parser_type: generic_json
+    trigger_conditions:
+      scopes: ["network"]
+    apt_package: masscan
+    version_flag: "--version"
+    timeout_seconds: 300
+
+  - name: enum4linux
+    binary: enum4linux
+    category: enumeration
+    tier: 2
+    description: Tool for enumerating information from Windows and Samba systems (SMB)
+    args_template: ["-a", "{target}"]
+    output_format: text
+    parser_type: enum4linux_text
+    trigger_conditions:
+      scopes: ["network"]
+      ports: [139, 445]
+    apt_package: enum4linux
+    version_flag: "-h"
+    timeout_seconds: 300
+
+  - name: smbclient
+    binary: smbclient
+    category: enumeration
+    tier: 2
+    description: Client for inspecting and querying SMB/CIFS shares and permissions
+    args_template: ["-L", "{target}", "-N"]
+    output_format: text
+    parser_type: generic_text
+    trigger_conditions:
+      scopes: ["network"]
+      ports: [139, 445]
+    apt_package: smbclient
+    version_flag: "--version"
+    timeout_seconds: 120
+
+  - name: zap
+    binary: zap-cli
+    category: web
+    tier: 2
+    description: OWASP Zed Attack Proxy automated active web application scanner
+    args_template: ["quick-scan", "-s", "all", "{target}"]
+    output_format: json
+    parser_type: generic_json
+    trigger_conditions:
+      scopes: ["web", "api"]
+    apt_package: zaproxy
+    version_flag: "--version"
+    timeout_seconds: 600
+
+  # ─── TIER 3: EXPLOITATION, CRACKING & INVASIVE (GATED & RESTRICTED) ───────────
+  - name: sqlmap
+    binary: sqlmap
+    category: exploitation
+    tier: 3
+    description: Automatic SQL injection detection, database fingerprinting and takeover
+    args_template: ["-u", "{target}", "--batch", "--random-agent", "--level=2", "--risk=1"]
+    output_format: text
+    parser_type: generic_text
+    trigger_conditions:
+      scopes: ["web", "api"]
+    apt_package: sqlmap
+    version_flag: "--version"
+    timeout_seconds: 600
+
+  - name: hydra
+    binary: hydra
+    category: exploitation
+    tier: 3
+    description: High-speed network logon cracker for auditing authentication weaknesses
+    args_template: ["-L", "{user_list}", "-P", "{pass_list}", "{target}", "{service}"]
+    output_format: text
+    parser_type: generic_text
+    trigger_conditions:
+      scopes: ["network"]
+    apt_package: hydra
+    version_flag: "-h"
+    timeout_seconds: 300
+
+  - name: john
+    binary: john
+    category: cracking
+    tier: 3
+    description: John the Ripper offline password hash security auditor
+    args_template: ["--format={format}", "{hash_file}"]
+    output_format: text
+    parser_type: generic_text
+    trigger_conditions:
+      scopes: ["network"]
+    apt_package: john
+    version_flag: "--version"
+    timeout_seconds: 300
+
+  - name: hashcat
+    binary: hashcat
+    category: cracking
+    tier: 3
+    description: Advanced password hash auditing and cracking engine
+    args_template: ["-m", "{mode}", "-a", "0", "{hash_file}", "{wordlist}"]
+    output_format: text
+    parser_type: generic_text
+    trigger_conditions:
+      scopes: ["network"]
+    apt_package: hashcat
+    version_flag: "--version"
+    timeout_seconds: 300
+
+  - name: metasploit
+    binary: msfconsole
+    category: exploitation
+    tier: 3
+    description: Metasploit Framework penetration testing and verification platform
+    args_template: ["-q", "-x", "exit"]
+    output_format: text
+    parser_type: generic_text
+    trigger_conditions:
+      scopes: ["network", "web"]
+    apt_package: metasploit-framework
+    version_flag: "-v"
+    timeout_seconds: 300
+
+  - name: responder
+    binary: responder
+    category: network
+    tier: 3
+    description: LLMNR, NBT-NS and MDNS poisoner (Consented isolated lab use only)
+    args_template: ["-I", "{interface}", "-w", "-r", "-f"]
+    output_format: text
+    parser_type: generic_text
+    trigger_conditions:
+      scopes: ["network"]
+    apt_package: responder
+    version_flag: "-h"
+    timeout_seconds: 180
+
+  - name: aircrack-ng
+    binary: aircrack-ng
+    category: wireless
+    tier: 3
+    description: Wireless 802.11 network security auditing suite
+    args_template: ["{capture_file}"]
+    output_format: text
+    parser_type: generic_text
+    trigger_conditions:
+      scopes: ["network"]
+    apt_package: aircrack-ng
+    version_flag: "-h"
+    timeout_seconds: 300
