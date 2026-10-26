@@ -8,6 +8,7 @@ import FindingsView from './views/FindingsView';
 import DefensiveView from './views/DefensiveView';
 import ToolsView from './views/ToolsView';
 import SystemView from './views/SystemView';
+import AgentView from './views/AgentView';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -104,6 +105,10 @@ export default function App() {
             onSelectScan={handleSelectScan}
             onNavigate={setActiveTab}
           />
+        )}
+
+        {activeTab === 'agent' && (
+          <AgentView />
         )}
 
         {activeTab === 'scans' && (

@@ -13,6 +13,7 @@ import {
 export default function Sidebar({ activeTab, setActiveTab, systemStatus }) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'agent', label: 'Kali AI Agent', icon: Terminal },
     { id: 'scans', label: 'Active Scans', icon: Scan },
     { id: 'findings', label: 'Findings Explorer', icon: Bug },
     { id: 'defensive', label: 'Purple Team Rules', icon: ShieldCheck },
