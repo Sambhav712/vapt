@@ -6,6 +6,7 @@ TOOL_CHECK -> RECON -> VULN_SCAN -> EXPLOITATION -> AI_ANALYSIS -> REPORT_GEN ->
 
 import asyncio
 import logging
+import time
 import traceback
 import uuid
 from datetime import datetime, timezone
@@ -16,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config.settings import get_settings
 from backend.db.models import (
-    Job, Finding, ToolOutput, DefensiveRule,
+    Job, Finding, ToolOutput, DefensiveRule, AIDecisionLog,
     PipelineStage, StageStatus, ScopeType, Severity, Confidence,
 )
 from backend.tools.installer import ToolInstaller
@@ -34,21 +35,20 @@ from backend.tools.base import ParsedResult
 from backend.tools.registry import ToolRegistry
 from backend.core.privilege_manager import get_privilege_manager
 from backend.core.api_manager import get_api_manager
+from backend.ai.decision_engine import AIDecisionEngine, AIDecision
 
 logger = logging.getLogger("sentinelvapt.orchestrator")
 
 
 class PipelineOrchestrator:
     """
-    Orchestrates the full VAPT pipeline as a sequential state machine.
-    Each stage runs to completion before the next begins.
+    Orchestrates the VAPT pipeline using an autonomous AI Decision Loop.
+    The AI dynamically inspects accumulated results and determines the optimal tool sequence.
     """
 
     STAGE_ORDER = [
         PipelineStage.TOOL_CHECK,
-        PipelineStage.RECON,
-        PipelineStage.VULN_SCAN,
-        PipelineStage.EXPLOITATION,
+        PipelineStage.AI_ORCHESTRATION,
         PipelineStage.AI_ANALYSIS,
         PipelineStage.REPORT_GENERATION,
         PipelineStage.DEFENSIVE_RULE_GENERATION,
@@ -61,6 +61,9 @@ class PipelineOrchestrator:
         self.job_id = job_id
         self.settings = get_settings()
         self._log_callback = log_callback
+
+        # Initialize AI Decision Engine
+        self.decision_engine = AIDecisionEngine()
 
         # Initialize tools
         self.installer = ToolInstaller()
@@ -154,32 +157,29 @@ class PipelineOrchestrator:
         return await self.run_pipeline()
 
     async def run_pipeline(self):
-        """Execute the full pipeline, stage by stage."""
+        """
+        Execute the AI-driven pipeline:
+        TOOL_CHECK -> AI_ORCHESTRATION (Dynamic Loop) -> AI_ANALYSIS -> REPORT_GENERATION -> DEFENSIVE_RULES -> DONE
+        """
         try:
-            # Stage 1: Tool Check
+            # Stage 1: Tool Check & Health Verification
             await self._run_tool_check()
 
-            # Stage 2: Recon
-            await self._run_recon()
+            # Stage 2: Autonomous AI Decision Loop (Replaces fixed RECON -> VULN_SCAN -> EXPLOITATION)
+            await self._run_ai_orchestration_loop()
 
-            # Stage 3: Vulnerability Scanning
-            await self._run_vuln_scan()
-
-            # Stage 4: Exploitation (gated)
-            await self._run_exploitation()
-
-            # Stage 5: AI Analysis
+            # Stage 3: AI Correlation, Impact Synthesis & False-Positive Pruning
             await self._run_ai_analysis()
 
-            # Stage 6: Report Generation
+            # Stage 4: Technical & Executive Report Generation
             await self._run_report_generation()
 
-            # Stage 7: Defensive Rule Generation
+            # Stage 5: Defensive SIEM / Firewall Rule Generation
             await self._run_defensive_rules()
 
-            # Done
+            # Complete
             await self._update_stage(PipelineStage.DONE, StageStatus.COMPLETED)
-            await self._log("done", "Pipeline completed successfully.")
+            await self._log("done", "Autonomous AI assessment completed successfully.")
 
             job = await self._get_job()
             job.completed_at = datetime.now(timezone.utc)
@@ -267,6 +267,429 @@ class PipelineOrchestrator:
         )
 
         await self._update_stage(PipelineStage.TOOL_CHECK, StageStatus.COMPLETED)
+
+    # ─── Stage 2: AI-Driven Autonomous Decision Loop ──────────────────
+
+    async def _run_ai_orchestration_loop(self):
+        """
+        Core AI Decision Loop: iteratively consults the LLM (Groq/Ollama)
+        to select, execute, and analyze tools dynamically based on live accumulated results.
+        """
+        await self._update_stage(PipelineStage.AI_ORCHESTRATION, StageStatus.RUNNING)
+        await self._log("ai_orchestrator", "Initiating AI-Driven Decision Loop...")
+
+        job = await self._get_job()
+        max_iterations = job.max_iterations or self.settings.ai_max_iterations or 20
+        max_time_seconds = self.settings.scan_max_time_seconds or 2400
+        start_time = time.time()
+
+        for iteration in range(1, max_iterations + 1):
+            elapsed = time.time() - start_time
+            if elapsed > max_time_seconds:
+                await self._log(
+                    "ai_orchestrator",
+                    f"Overall scan timeout reached ({int(elapsed)}s / {max_time_seconds}s limit). Ending decision loop.",
+                )
+                break
+
+            # Refresh job and update current_iteration
+            job = await self._get_job()
+            job.current_iteration = iteration
+            await self.session.commit()
+
+            # Gather live context
+            knowledge = await self._gather_accumulated_knowledge(job.target)
+            history = await self._gather_execution_history()
+            available_tools = self._get_available_tools(job)
+
+            await self._log(
+                "ai_orchestrator",
+                f"[Iteration {iteration}/{max_iterations}] Consulting AI Decision Engine (accumulated findings: {len(knowledge.get('findings', []))}, available tools: {len(available_tools)})...",
+            )
+
+            decision = await self.decision_engine.decide_next_step(
+                target=job.target,
+                scope_type=job.scope_type.value,
+                authorized_exploitation=job.authorized_exploitation,
+                available_tools=available_tools,
+                execution_history=history,
+                accumulated_knowledge=knowledge,
+                iteration=iteration,
+                max_iterations=max_iterations,
+            )
+
+            # Update job orchestration mode
+            job.ai_orchestration_mode = (
+                "heuristic_fallback"
+                if decision.raw_response == "HEURISTIC_FALLBACK"
+                else "ai_driven"
+            )
+            await self.session.commit()
+
+            # Broadcast AI decision to logs
+            await self._log(
+                "ai_decision",
+                f"[Iteration {iteration}/{max_iterations}] Action: {decision.action.upper()} | "
+                f"Tool: {decision.tool_name or 'None'} | "
+                f"Confidence: {int(decision.confidence * 100)}% | "
+                f"Reasoning: {decision.reasoning}",
+            )
+
+            if decision.action == "finish":
+                finish_log = AIDecisionLog(
+                    job_id=self.job_id,
+                    iteration=iteration,
+                    chosen_tool=None,
+                    action="finish",
+                    reasoning=decision.reasoning,
+                    expected_outcome=decision.expected_outcome,
+                    confidence=decision.confidence,
+                    tool_args={},
+                    tool_execution_result={"summary": "Scan concluded by AI decision engine"},
+                    prompt_tokens=decision.prompt_tokens,
+                    completion_tokens=decision.completion_tokens,
+                    latency=decision.latency,
+                )
+                self.session.add(finish_log)
+                await self.session.commit()
+                await self._log(
+                    "ai_orchestrator",
+                    "AI decided that sufficient evidence and coverage have been achieved. Proceeding to post-processing.",
+                )
+                break
+
+            elif decision.action == "need_authorization":
+                auth_log = AIDecisionLog(
+                    job_id=self.job_id,
+                    iteration=iteration,
+                    chosen_tool=decision.tool_name,
+                    action="need_authorization",
+                    reasoning=decision.reasoning,
+                    expected_outcome=decision.expected_outcome,
+                    confidence=decision.confidence,
+                    tool_args=decision.tool_args,
+                    tool_execution_result={"summary": "Skipped: requires explicit user exploitation authorization"},
+                    prompt_tokens=decision.prompt_tokens,
+                    completion_tokens=decision.completion_tokens,
+                    latency=decision.latency,
+                )
+                self.session.add(auth_log)
+                await self.session.commit()
+                await self._log(
+                    "ai_decision",
+                    f"⚠ Tool [{decision.tool_name}] requires exploitation authorization. Skipping and prompting AI for non-destructive alternative.",
+                )
+                continue
+
+            elif decision.action in ("run_tool", "fallback"):
+                tool_name = decision.tool_name
+                await self._log(
+                    "ai_orchestrator",
+                    f"Executing [{tool_name}] — Expected: {decision.expected_outcome}",
+                )
+
+                tool_result = await self._execute_tool_by_name(tool_name, decision.tool_args, job)
+                await self._save_tool_output(tool_name, PipelineStage.AI_ORCHESTRATION, tool_result)
+
+                # Save findings if any
+                findings_to_save = tool_result.findings or []
+                if not findings_to_save:
+                    findings_to_save = self._extract_findings_from_catalog_output(tool_name, tool_result, job.target)
+                if findings_to_save:
+                    await self._save_findings(findings_to_save)
+
+                # Record decision log
+                summary = (
+                    f"{'Success' if tool_result.success else 'Failed'} with "
+                    f"{len(findings_to_save)} findings in {tool_result.duration_seconds:.1f}s"
+                )
+                run_log = AIDecisionLog(
+                    job_id=self.job_id,
+                    iteration=iteration,
+                    chosen_tool=tool_name,
+                    action=decision.action,
+                    reasoning=decision.reasoning,
+                    expected_outcome=decision.expected_outcome,
+                    confidence=decision.confidence,
+                    tool_args=decision.tool_args,
+                    tool_execution_result={
+                        "success": tool_result.success,
+                        "duration_seconds": tool_result.duration_seconds,
+                        "findings_count": len(findings_to_save),
+                        "summary": summary,
+                        "error": tool_result.error_message,
+                    },
+                    prompt_tokens=decision.prompt_tokens,
+                    completion_tokens=decision.completion_tokens,
+                    latency=decision.latency,
+                )
+                self.session.add(run_log)
+                await self.session.commit()
+
+                await self._log("ai_orchestrator", f"Tool [{tool_name}] completed: {summary}")
+
+        await self._update_stage(PipelineStage.AI_ORCHESTRATION, StageStatus.COMPLETED)
+        await self._log("ai_orchestrator", "AI-Driven Decision Loop completed.")
+
+    async def _execute_tool_by_name(
+        self, tool_name: str, tool_args: Dict[str, Any], job: Job
+    ) -> ParsedResult:
+        """
+        Unified tool executor that routes tool requests to native tool classes
+        or dynamic ToolRegistry catalog items.
+        """
+        loop = asyncio.get_event_loop()
+        target = tool_args.get("target") or job.target
+        domain = self._extract_domain(target)
+        name_lower = (tool_name or "").lower().strip()
+
+        # 1. Native Tool Classes
+        if name_lower == "nmap":
+            nmap_opts = {"scan_type": "quick", "service_version": True}
+            if job.scope_type == ScopeType.NETWORK:
+                nmap_opts["os_detect"] = True
+                nmap_opts["scan_type"] = "full"
+            return await loop.run_in_executor(None, lambda: self.nmap.run(target, nmap_opts))
+
+        elif name_lower == "nuclei":
+            return await loop.run_in_executor(None, lambda: self.nuclei.run(target))
+
+        elif name_lower == "zap":
+            if self.zap.is_zap_running():
+                return await loop.run_in_executor(None, lambda: self.zap.run(target, {"scan_type": "full"}))
+            return ParsedResult(tool_name="zap", success=False, error_message="OWASP ZAP daemon is not currently active.")
+
+        elif name_lower == "sqlmap":
+            return await loop.run_in_executor(
+                None, lambda: self.sqlmap.run(target, {"forms": True, "level": 2, "risk": 1})
+            )
+
+        elif name_lower == "subfinder":
+            return await loop.run_in_executor(None, lambda: self.subfinder.run(domain))
+
+        elif name_lower == "httpx":
+            knowledge = await self._gather_accumulated_knowledge(target)
+            subs = knowledge.get("subdomains", [])
+            opts = {"hosts": subs} if subs else {}
+            return await loop.run_in_executor(None, lambda: self.httpx.run(domain if subs else target, opts))
+
+        elif name_lower == "nikto":
+            return await loop.run_in_executor(None, lambda: self.nikto.run(target))
+
+        elif name_lower == "amass":
+            return await loop.run_in_executor(None, lambda: self.amass.run(domain, {"mode": "passive"}))
+
+        elif name_lower == "metasploit":
+            resolved_ip = self._resolve_target(target)
+            if not job.authorized_exploitation or not self.settings.is_target_allowlisted(resolved_ip):
+                return ParsedResult(
+                    tool_name="metasploit",
+                    success=False,
+                    error_message=f"Target {resolved_ip} is not in the authorized exploitation allowlist.",
+                )
+            services = await self._get_discovered_services()
+            cves = await self._get_discovered_cves()
+            return await loop.run_in_executor(
+                None,
+                lambda: self.metasploit.run(
+                    target,
+                    {
+                        "authorized_exploitation": True,
+                        "services": services,
+                        "cves": cves,
+                        "module_type": "auxiliary",
+                        "max_modules": 5,
+                    },
+                ),
+            )
+
+        elif name_lower == "api_security":
+            return await loop.run_in_executor(None, lambda: self.api_security.run(target))
+
+        # 2. Extensible Tool Registry Catalog Tools
+        elif name_lower in self.registry.tools:
+            entry = self.registry.tools[name_lower]
+            res = await self.registry.execute_tool(entry, target, extra_vars=tool_args)
+            extracted = self._extract_findings_from_catalog_output(name_lower, res, target)
+            if extracted and not res.findings:
+                res.findings = extracted
+            return res
+
+        else:
+            return ParsedResult(
+                tool_name=name_lower,
+                success=False,
+                error_message=f"Tool '{name_lower}' is not registered in the catalog.",
+            )
+
+    async def _gather_accumulated_knowledge(self, target: str) -> Dict[str, Any]:
+        """Aggregate all intelligence discovered so far for LLM tool selection."""
+        services = await self._get_discovered_services()
+        ports = [s["port"] for s in services if s.get("port")]
+        technologies = await self._get_discovered_tech()
+        findings_summary = await self._get_current_findings_summary()
+
+        # Discovered subdomains
+        subdomains = set()
+        sub_res = await self.session.execute(
+            select(ToolOutput).where(
+                ToolOutput.job_id == self.job_id,
+                ToolOutput.tool_name.in_(["subfinder", "amass", "httpx"]),
+            )
+        )
+        for out in sub_res.scalars().all():
+            if out.parsed_output and isinstance(out.parsed_output, dict):
+                for s in out.parsed_output.get("subdomains", []):
+                    if isinstance(s, str):
+                        subdomains.add(s)
+                for h in out.parsed_output.get("hosts", []):
+                    if isinstance(h, str):
+                        subdomains.add(h)
+                    elif isinstance(h, dict) and "host" in h:
+                        subdomains.add(h["host"])
+
+        # WAF detection status
+        waf_info = "None detected / Not yet tested"
+        waf_res = await self.session.execute(
+            select(ToolOutput).where(
+                ToolOutput.job_id == self.job_id,
+                ToolOutput.tool_name == "wafw00f",
+            )
+        )
+        waf_out = waf_res.scalars().first()
+        if waf_out and waf_out.parsed_output:
+            if waf_out.parsed_output.get("waf_detected"):
+                wafs = waf_out.parsed_output.get("firewalls", [])
+                waf_info = ", ".join(wafs) if wafs else "Generic WAF detected"
+            else:
+                waf_info = "No WAF detected"
+
+        # Discovered endpoints
+        endpoints = set()
+        ep_res = await self.session.execute(
+            select(ToolOutput).where(
+                ToolOutput.job_id == self.job_id,
+                ToolOutput.tool_name.in_(["gobuster", "zap"]),
+            )
+        )
+        for out in ep_res.scalars().all():
+            if out.parsed_output and isinstance(out.parsed_output, dict):
+                for p in out.parsed_output.get("discovered_paths", []):
+                    if isinstance(p, dict) and "path" in p:
+                        endpoints.add(p["path"])
+                    elif isinstance(p, str):
+                        endpoints.add(p)
+
+        return {
+            "subdomains": sorted(list(subdomains)),
+            "open_ports": ports,
+            "services": services,
+            "technologies": technologies,
+            "waf": waf_info,
+            "endpoints": sorted(list(endpoints)),
+            "findings": findings_summary,
+        }
+
+    async def _gather_execution_history(self) -> List[Dict[str, Any]]:
+        """Retrieve timeline of past tool runs from AIDecisionLog."""
+        result = await self.session.execute(
+            select(AIDecisionLog)
+            .where(AIDecisionLog.job_id == self.job_id)
+            .order_by(AIDecisionLog.iteration)
+        )
+        decisions = result.scalars().all()
+        history = []
+        for d in decisions:
+            if d.action in ("run_tool", "fallback") and d.chosen_tool:
+                res_data = d.tool_execution_result or {}
+                history.append({
+                    "iteration": d.iteration,
+                    "tool_name": d.chosen_tool,
+                    "success": res_data.get("success", True),
+                    "duration_seconds": res_data.get("duration_seconds", 0.0),
+                    "findings_count": res_data.get("findings_count", 0),
+                    "summary": res_data.get("summary", d.reasoning),
+                })
+        return history
+
+    def _get_available_tools(self, job: Job) -> List[Dict[str, Any]]:
+        """Return the comprehensive list of installed/registered tools available for this job."""
+        tools = []
+        native_specs = [
+            ("whatweb", "recon", 1, "Next-generation web scanner for technology and CMS fingerprinting"),
+            ("wafw00f", "recon", 1, "Web Application Firewall (WAF) fingerprinting and detection"),
+            ("nmap", "network", 1, "Port scanning, service detection, and OS fingerprinting"),
+            ("subfinder", "recon", 1, "Passive subdomain discovery using OSINT sources"),
+            ("httpx", "recon", 1, "Fast multi-purpose HTTP probe and tech detector"),
+            ("amass", "recon", 1, "In-depth attack surface mapping and DNS asset discovery"),
+            ("nuclei", "vuln_scan", 2, "Fast and customizable vulnerability scanner using community templates"),
+            ("nikto", "vuln_scan", 2, "Web server scanner for dangerous files, outdated server software, and misconfigurations"),
+            ("sqlmap", "vuln_scan", 2, "Automatic SQL injection detection and exploitation engine"),
+            ("zap", "vuln_scan", 2, "OWASP ZAP dynamic application security testing (DAST)"),
+            ("api_security", "vuln_scan", 2, "Automated OWASP API Security Top 10 auditing"),
+            ("metasploit", "exploitation", 3, "Penetration testing and exploit execution platform"),
+        ]
+
+        manual_disabled = set(job.disabled_tools or [])
+        manual_enabled = set(job.enabled_tools or [])
+        seen = set()
+
+        for name, cat, tier, desc in native_specs:
+            if name in manual_disabled:
+                continue
+            if tier == 3 and not job.authorized_exploitation:
+                continue
+
+            installed = False
+            if name == "nmap":
+                installed = self.nmap.is_available()
+            elif name == "nuclei":
+                installed = self.nuclei.is_available()
+            elif name == "zap":
+                installed = self.zap.is_zap_running() or self.zap.is_available()
+            elif name == "sqlmap":
+                installed = self.sqlmap.is_available()
+            elif name == "subfinder":
+                installed = self.subfinder.is_available()
+            elif name == "httpx":
+                installed = self.httpx.is_available()
+            elif name == "nikto":
+                installed = self.nikto.is_available()
+            elif name == "amass":
+                installed = self.amass.is_available()
+            elif name == "metasploit":
+                installed = self.metasploit.is_available()
+            elif name == "api_security":
+                installed = True
+            elif name in self.registry.tools:
+                installed = self.registry.tools[name].installed
+            else:
+                installed = True
+
+            if installed or name in manual_enabled:
+                seen.add(name)
+                tools.append({
+                    "name": name,
+                    "category": cat,
+                    "tier": tier,
+                    "description": desc,
+                })
+
+        # Add any additional detected tools from YAML catalog
+        for name, entry in self.registry.tools.items():
+            if name in seen or name in manual_disabled:
+                continue
+            if entry.tier == 3 and not job.authorized_exploitation:
+                continue
+            if entry.installed or name in manual_enabled:
+                tools.append({
+                    "name": entry.name,
+                    "category": entry.category,
+                    "tier": entry.tier,
+                    "description": entry.description,
+                })
+
+        return tools
 
     # ─── Stage 2: Recon ────────────────────────────────
 

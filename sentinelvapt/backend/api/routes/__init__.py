@@ -4,6 +4,7 @@ from backend.api.routes.defensive import router as defensive_router
 from backend.api.routes.reports import router as reports_router
 from backend.api.routes.tools import router as tools_router
 from backend.api.routes.system import router as system_router
+from backend.api.routes.agent import router as agent_router
 
 __all__ = [
     "scans_router",
@@ -12,4 +13,5 @@ __all__ = [
     "reports_router",
     "tools_router",
     "system_router",
+    "agent_router",
 ]

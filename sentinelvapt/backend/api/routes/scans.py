@@ -21,6 +21,7 @@ from backend.core.orchestrator import PipelineOrchestrator
 from backend.db.models import (
     Finding,
     Job,
+    AIDecisionLog,
     PipelineStage,
     ScopeType,
     StageStatus,
@@ -47,6 +48,10 @@ class CreateScanRequest(BaseModel):
     authorized_exploitation: bool = Field(
         default=False,
         description="Enable safe authorized verification (requires target to be in allowlist)",
+    )
+    max_iterations: Optional[int] = Field(
+        default=20,
+        description="Maximum AI decision iterations for tool discovery",
     )
     enabled_tools: Optional[List[str]] = Field(
         default=None,
@@ -165,6 +170,9 @@ async def create_scan(
         target=target_clean,
         scope_type=payload.scope_type,
         authorized_exploitation=payload.authorized_exploitation,
+        max_iterations=payload.max_iterations or 20,
+        ai_orchestration_mode="ai_driven",
+        current_iteration=0,
         enabled_tools=payload.enabled_tools or [],
         disabled_tools=payload.disabled_tools or [],
         current_stage=PipelineStage.TOOL_CHECK,
@@ -310,12 +318,53 @@ async def get_scan(
         "logs": job.logs or [],
         "finding_counts": counts,
         "is_running": str(job.id) in _running_tasks,
+        "ai_orchestration_mode": getattr(job, "ai_orchestration_mode", "ai_driven") or "ai_driven",
+        "current_iteration": getattr(job, "current_iteration", 0) or 0,
+        "max_iterations": getattr(job, "max_iterations", 20) or 20,
         "reports": {
             "pdf": bool(job.report_pdf_path),
             "json": bool(job.report_json_path),
             "markdown": bool(job.report_md_path),
         },
     }
+
+
+@router.get(
+    "/{job_id}/ai-decisions",
+    summary="Get all AI decision records and live reasoning timeline for a scan job",
+)
+async def get_ai_decisions(
+    job_id: str, session: AsyncSession = Depends(get_async_session)
+):
+    try:
+        jid = uuid.UUID(job_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID format")
+
+    result = await session.execute(
+        select(AIDecisionLog)
+        .where(AIDecisionLog.job_id == jid)
+        .order_by(AIDecisionLog.iteration.asc())
+    )
+    decisions = result.scalars().all()
+    return [
+        {
+            "id": str(d.id),
+            "iteration": d.iteration,
+            "chosen_tool": d.chosen_tool,
+            "action": d.action,
+            "reasoning": d.reasoning,
+            "expected_outcome": d.expected_outcome,
+            "confidence": d.confidence,
+            "tool_args": d.tool_args or {},
+            "tool_execution_result": d.tool_execution_result or {},
+            "prompt_tokens": d.prompt_tokens,
+            "completion_tokens": d.completion_tokens,
+            "latency": d.latency,
+            "created_at": d.created_at.isoformat() if d.created_at else None,
+        }
+        for d in decisions
+    ]
 
 
 @router.delete(

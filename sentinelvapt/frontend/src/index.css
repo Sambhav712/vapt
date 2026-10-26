@@ -757,3 +757,140 @@ code, pre {
   gap: 12px;
   background: rgba(255, 255, 255, 0.015);
 }
+
+/* ── AI Decision Engine & Orchestration UI ──────────────────── */
+.ai-status-card {
+  background: linear-gradient(135deg, rgba(16, 24, 48, 0.85) 0%, rgba(20, 16, 42, 0.85) 100%);
+  border: 1px solid rgba(0, 242, 254, 0.25);
+  border-radius: 12px;
+  padding: 18px 22px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), inset 0 0 20px rgba(0, 242, 254, 0.04);
+  position: relative;
+  overflow: hidden;
+}
+
+.ai-status-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #00f2fe, #a855f7, #ff2a5f);
+}
+
+.ai-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ai-mode-badge.ai-driven {
+  background: rgba(168, 85, 247, 0.18);
+  border: 1px solid rgba(168, 85, 247, 0.45);
+  color: #c084fc;
+}
+
+.ai-mode-badge.heuristic {
+  background: rgba(245, 158, 11, 0.18);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  color: #fbbf24;
+}
+
+.ai-progress-track {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.ai-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--cyber-cyan), var(--cyber-purple));
+  border-radius: 3px;
+  transition: width 0.4s ease;
+  box-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
+}
+
+.ai-decision-card {
+  background: rgba(13, 20, 38, 0.7);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 14px 18px;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.ai-decision-card:hover {
+  background: rgba(18, 28, 54, 0.85);
+  border-color: rgba(0, 242, 254, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.ai-decision-card.action-run_tool {
+  border-left: 3px solid var(--cyber-cyan);
+}
+
+.ai-decision-card.action-finish {
+  border-left: 3px solid var(--cyber-emerald);
+}
+
+.ai-decision-card.action-need_authorization {
+  border-left: 3px solid var(--sev-high);
+}
+
+.ai-decision-card.action-fallback {
+  border-left: 3px solid var(--cyber-amber);
+}
+
+.ai-reasoning-box {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 0.84rem;
+  color: #e2e8f0;
+  line-height: 1.5;
+  border-left: 2px solid var(--cyber-purple);
+}
+
+.ai-outcome-box {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.tab-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab-nav-btn.active {
+  background: rgba(0, 242, 254, 0.12);
+  border-color: rgba(0, 242, 254, 0.35);
+  color: var(--cyber-cyan);
+}
+
+.tab-nav-btn:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+}

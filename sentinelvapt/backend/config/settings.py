@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     groq_model: str = "llama-3.3-70b-versatile"
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.1"
+    ai_max_iterations: int = 20
+    ai_decision_timeout: int = 120
+    scan_max_time_seconds: int = 2400
 
     # ── OWASP ZAP ────────────────────────────────────────────
     zap_api_key: str = ""

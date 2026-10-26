@@ -5,6 +5,7 @@ export default function NewScanModal({ isOpen, onClose, onScanCreated }) {
   const [target, setTarget] = useState('');
   const [scopeType, setScopeType] = useState('web');
   const [authorizedExploit, setAuthorizedExploit] = useState(false);
+  const [maxIterations, setMaxIterations] = useState(20);
   const [availableTools, setAvailableTools] = useState([]);
   const [selectedTools, setSelectedTools] = useState(new Set());
   const [showToolSelect, setShowToolSelect] = useState(false);
@@ -60,6 +61,7 @@ export default function NewScanModal({ isOpen, onClose, onScanCreated }) {
           target: cleanTarget,
           scope_type: scopeType,
           authorized_exploitation: authorizedExploit,
+          max_iterations: parseInt(maxIterations, 10) || 20,
           enabled_tools: Array.from(selectedTools),
         }),
       });
@@ -145,6 +147,24 @@ export default function NewScanModal({ isOpen, onClose, onScanCreated }) {
                 <option value="api">REST/OpenAPI Services (Fuzzer, Nuclei API, Dirsearch)</option>
                 <option value="network">Network Infrastructure (Nmap, Services, Port Discovery, SMB)</option>
               </select>
+            </div>
+
+            <div className="form-group" style={{ marginTop: '12px' }}>
+              <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>AI Orchestrator Max Iterations</span>
+                <span style={{ color: 'var(--cyber-cyan)', fontWeight: '700' }}>{maxIterations} Steps</span>
+              </label>
+              <input
+                type="number"
+                min="3"
+                max="50"
+                className="form-input"
+                value={maxIterations}
+                onChange={(e) => setMaxIterations(Math.max(1, parseInt(e.target.value, 10) || 20))}
+              />
+              <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                Maximum autonomous decision steps the AI engine can execute before concluding the scan.
+              </span>
             </div>
 
             {/* Authorized Exploitation Gating */}

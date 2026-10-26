@@ -81,6 +81,15 @@ def _sync_migrate_sqlite(sync_conn):
             if "ai_analysis_result" not in cols:
                 sync_conn.execute(text("ALTER TABLE jobs ADD COLUMN ai_analysis_result JSON"))
                 logger.info("Auto-migrated: added 'ai_analysis_result' column to jobs table.")
+            if "ai_orchestration_mode" not in cols:
+                sync_conn.execute(text("ALTER TABLE jobs ADD COLUMN ai_orchestration_mode VARCHAR(32) DEFAULT 'ai_driven'"))
+                logger.info("Auto-migrated: added 'ai_orchestration_mode' column to jobs table.")
+            if "current_iteration" not in cols:
+                sync_conn.execute(text("ALTER TABLE jobs ADD COLUMN current_iteration INTEGER DEFAULT 0"))
+                logger.info("Auto-migrated: added 'current_iteration' column to jobs table.")
+            if "max_iterations" not in cols:
+                sync_conn.execute(text("ALTER TABLE jobs ADD COLUMN max_iterations INTEGER DEFAULT 20"))
+                logger.info("Auto-migrated: added 'max_iterations' column to jobs table.")
     except Exception as m_err:
         logger.debug("SQLite auto-migration skipped: %s", m_err)
 

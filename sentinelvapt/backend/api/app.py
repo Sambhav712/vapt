@@ -17,6 +17,7 @@ from backend.api.routes.reports import router as reports_router
 from backend.api.routes.scans import router as scans_router
 from backend.api.routes.system import router as system_router
 from backend.api.routes.tools import router as tools_router
+from backend.api.routes.agent import router as agent_router
 from backend.config.settings import get_settings
 from backend.db.session import init_db
 
@@ -78,6 +79,7 @@ app.include_router(defensive_router)
 app.include_router(reports_router)
 app.include_router(tools_router)
 app.include_router(system_router)
+app.include_router(agent_router)
 
 
 # Mount built frontend dist if available
